@@ -36,10 +36,10 @@ import static spark.Service.ignite;
  *
  * @author Per Wendel
  */
-public final class Spark {
+public class Spark {
 
     // Hide constructor
-    private Spark() {
+    protected Spark() {
     }
 
     /**
@@ -57,6 +57,11 @@ public final class Spark {
      * Statically import this for redirect utility functionality, see {@link spark.Redirect}
      */
     public static final Redirect redirect = getInstance().redirect;
+
+    /**
+     * Statically import this for static files utility functionality, see {@link spark.Service.StaticFiles}
+     */
+    public static final Service.StaticFiles staticFiles = getInstance().staticFiles;
 
     /**
      * Map the route for HTTP GET requests
@@ -159,6 +164,19 @@ public final class Spark {
     }
 
     /**
+     * Maps an array of filters to be executed before any matching routes
+     *
+     * @param path    the path
+     * @param filters the filters
+     */
+
+    public static void before(String path, Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().before(path, filter);
+        }
+    }
+
+    /**
      * Maps a filter to be executed after any matching routes
      *
      * @param path   the path
@@ -166,6 +184,19 @@ public final class Spark {
      */
     public static void after(String path, Filter filter) {
         getInstance().after(path, filter);
+    }
+
+    /**
+     * Maps an array of filters to be executed after any matching routes
+     *
+     * @param path    the path
+     * @param filters The filters
+     */
+
+    public static void after(String path, Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().after(path, filter);
+        }
     }
 
     //////////////////////////////////////////////////
@@ -273,43 +304,52 @@ public final class Spark {
 
 
     /**
-     * Maps a filter to be executed before any matching routes
+     * Maps one or many filters to be executed before any matching routes
      *
-     * @param filter The filter
+     * @param filters The filters
      */
-    public static void before(Filter filter) {
-        getInstance().before(filter);
+    public static void before(Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().before(filter);
+        }
     }
 
     /**
-     * Maps a filter to be executed after any matching routes
+     * Maps one or many filters to be executed after any matching routes
      *
-     * @param filter The filter
+     * @param filters The filters
      */
-    public static void after(Filter filter) {
-        getInstance().after(filter);
+    public static void after(Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().after(filter);
+        }
     }
 
     /**
-     * Maps a filter to be executed before any matching routes
+     * Maps one or many filters to be executed before any matching routes
      *
      * @param path       the path
      * @param acceptType the accept type
-     * @param filter     The filter
+     * @param filters    The filters
      */
-    public static void before(String path, String acceptType, Filter filter) {
-        getInstance().before(path, acceptType, filter);
+    public static void before(String path, String acceptType, Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().before(path, acceptType, filter);
+        }
     }
 
+
     /**
-     * Maps a filter to be executed after any matching routes
+     * Maps one or many filters to be executed after any matching routes
      *
      * @param path       the path
      * @param acceptType the accept type
-     * @param filter     The filter
+     * @param filters    The filters
      */
-    public static void after(String path, String acceptType, Filter filter) {
-        getInstance().after(path, acceptType, filter);
+    public static void after(String path, String acceptType, Filter... filters) {
+        for (Filter filter : filters) {
+            getInstance().after(path, acceptType, filter);
+        }
     }
 
     //////////////////////////////////////////////////
@@ -963,6 +1003,8 @@ public final class Spark {
     /**
      * Sets the folder in classpath serving static files. Observe: this method
      * must be called before all other methods.
+     * -
+     * Note: contemplate changing tonew static files paradigm {@link spark.Service.StaticFiles}
      *
      * @param folder the folder in classpath.
      */
@@ -973,6 +1015,8 @@ public final class Spark {
     /**
      * Sets the external folder serving static files. <b>Observe: this method
      * must be called before all other methods.</b>
+     * -
+     * Note: contemplate use of new static files paradigm {@link spark.Service.StaticFiles}
      *
      * @param externalFolder the external folder serving static files.
      */

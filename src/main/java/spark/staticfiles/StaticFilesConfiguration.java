@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 - Per Wendel
+ * Copyright 2016 - Per Wendel
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -17,9 +17,13 @@
 package spark.staticfiles;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -33,6 +37,7 @@ import spark.resource.ClassPathResource;
 import spark.resource.ClassPathResourceHandler;
 import spark.resource.ExternalResource;
 import spark.resource.ExternalResourceHandler;
+import spark.resource.JarResourceHandler;
 import spark.utils.Assert;
 import spark.utils.GzipUtils;
 import spark.utils.IOUtils;
@@ -41,16 +46,18 @@ import spark.utils.IOUtils;
  * Holds the static file configuration.
  * TODO: Cache-Control and ETAG
  */
-public class StaticFiles {
-    private final Logger LOG = LoggerFactory.getLogger(StaticFiles.class);
+public class StaticFilesConfiguration {
+    private final Logger LOG = LoggerFactory.getLogger(StaticFilesConfiguration.class);
 
     private List<AbstractResourceHandler> staticResourceHandlers = null;
+    private List<JarResourceHandler> jarResourceHandlers = null;
 
     private boolean staticResourcesSet = false;
     private boolean externalStaticResourcesSet = false;
 
-    public static StaticFiles servletInstance = new StaticFiles();
+    public static StaticFilesConfiguration servletInstance = new StaticFilesConfiguration();
 
+    private Map<String, String> customHeaders = new HashMap<>();
 
     /**
      * @return true if consumed, false otherwise.
@@ -58,19 +65,60 @@ public class StaticFiles {
     public boolean consume(HttpServletRequest httpRequest,
                            HttpServletResponse httpResponse) throws IOException {
 
+        if (consumeWithFileResourceHandlers(httpRequest, httpResponse)) {
+            return true;
+        }
+
+        if (consumeWithJarResourceHandler(httpRequest, httpResponse)) {
+            return true;
+        }
+
+        return false;
+    }
+
+
+    private boolean consumeWithFileResourceHandlers(HttpServletRequest httpRequest,
+                                                    HttpServletResponse httpResponse) throws IOException {
         if (staticResourceHandlers != null) {
+
             for (AbstractResourceHandler staticResourceHandler : staticResourceHandlers) {
+
                 AbstractFileResolvingResource resource = staticResourceHandler.getResource(httpRequest);
+
                 if (resource != null && resource.isReadable()) {
                     OutputStream wrappedOutputStream = GzipUtils.checkAndWrap(httpRequest, httpResponse, false);
+                    customHeaders.forEach(httpResponse::setHeader); //add all user-defined headers to response
                     IOUtils.copy(resource.getInputStream(), wrappedOutputStream);
                     wrappedOutputStream.flush();
                     wrappedOutputStream.close();
                     return true;
                 }
             }
-        }
 
+        }
+        return false;
+    }
+
+    private boolean consumeWithJarResourceHandler(HttpServletRequest httpRequest,
+                                                  HttpServletResponse httpResponse) throws IOException {
+        if (jarResourceHandlers != null) {
+
+            for (JarResourceHandler jarResourceHandler : jarResourceHandlers) {
+                InputStream stream = jarResourceHandler.getResource(httpRequest);
+
+                if (stream != null) {
+                    OutputStream wrappedOutputStream = GzipUtils.checkAndWrap(httpRequest, httpResponse, false);
+                    customHeaders.forEach(httpResponse::setHeader); //add all user-defined headers to response
+
+                    IOUtils.copy(stream, wrappedOutputStream);
+
+                    wrappedOutputStream.flush();
+                    wrappedOutputStream.close();
+
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
@@ -78,10 +126,17 @@ public class StaticFiles {
      * Clears all static file configuration
      */
     public void clear() {
+
         if (staticResourceHandlers != null) {
             staticResourceHandlers.clear();
             staticResourceHandlers = null;
         }
+
+        if (jarResourceHandlers != null) {
+            jarResourceHandlers.clear();
+            jarResourceHandlers = null;
+        }
+
         staticResourcesSet = false;
         externalStaticResourcesSet = false;
     }
@@ -97,6 +152,11 @@ public class StaticFiles {
         if (!staticResourcesSet) {
             try {
                 ClassPathResource resource = new ClassPathResource(folder);
+
+                if (configureJarCase(folder, resource)) {
+                    return;
+                }
+
                 if (!resource.getFile().isDirectory()) {
                     LOG.error("Static resource location must be a folder");
                     return;
@@ -105,6 +165,7 @@ public class StaticFiles {
                 if (staticResourceHandlers == null) {
                     staticResourceHandlers = new ArrayList<>();
                 }
+
                 staticResourceHandlers.add(new ClassPathResourceHandler(folder, "index.html"));
                 LOG.info("StaticResourceHandler configured with folder = " + folder);
             } catch (IOException e) {
@@ -113,6 +174,28 @@ public class StaticFiles {
             staticResourcesSet = true;
         }
 
+    }
+
+    private boolean configureJarCase(String folder, ClassPathResource resource) throws IOException {
+        if (resource.getURL().getProtocol().equals("jar")) {
+
+            InputStream stream = StaticFilesConfiguration.class.getResourceAsStream(folder);
+
+            if (stream != null) {
+                if (jarResourceHandlers == null) {
+                    jarResourceHandlers = new ArrayList<>();
+                }
+
+                // Add jar file resource handler
+                jarResourceHandlers.add(new JarResourceHandler(folder, "index.html"));
+                staticResourcesSet = true;
+                return true;
+            } else {
+                LOG.error("Static file configuration failed.");
+            }
+
+        }
+        return false;
     }
 
     /**
@@ -144,7 +227,20 @@ public class StaticFiles {
 
     }
 
-    public static StaticFiles create() {
-        return new StaticFiles();
+    public static StaticFilesConfiguration create() {
+        return new StaticFilesConfiguration();
+    }
+
+    public void setExpireTimeSeconds(long expireTimeSeconds) {
+        customHeaders.put("Cache-Control", "private, max-age=" + expireTimeSeconds);
+        customHeaders.put("Expires", new Date(System.currentTimeMillis() + (expireTimeSeconds * 1000)).toString());
+    }
+
+    public void putCustomHeaders(Map<String, String> headers) {
+        customHeaders.putAll(headers);
+    }
+
+    public void putCustomHeader(String key, String value) {
+        customHeaders.put(key, value);
     }
 }

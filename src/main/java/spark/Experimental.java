@@ -14,26 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package spark.route;
+package spark;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /**
- * Holds the servlet routes.
+ * Types and methods annotated with this annotation are experimental and may be changed or removed from the API at any
+ * time. (This does not mean it won't be part of the official API at any point either).
  *
  * @author Per Wendel
  */
-public final class ServletRoutes {
-
-    private static Routes routes = null;
-
-    private ServletRoutes() {
-    }
-
-    public static synchronized Routes get() {
-        if (routes == null) {
-            routes = new Routes();
-        }
-        return routes;
-    }
-
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Experimental {
+    String value() default "";
 }
